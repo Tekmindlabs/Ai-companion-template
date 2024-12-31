@@ -1,7 +1,6 @@
-import NextAuth from "next-auth";
-import { authConfig } from "./lib/auth";
+import { withAuth } from "next-auth/middleware";
 
-export default NextAuth(authConfig).auth;
+export default withAuth;
 
 export const config = {
   matcher: [

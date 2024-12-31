@@ -1,16 +1,10 @@
 import { z } from "zod";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import type { AuthConfig, User as AuthUser } from "@auth/core";
-import type { JWT } from "@auth/core/jwt";
-import type { Session } from "@auth/core/types";
+import type { NextAuthConfig } from "next-auth";
+import type { JWT } from "next-auth/jwt";
+import type { Session, Account, Profile } from "next-auth";
 import { db } from "@/lib/db";
-import Credentials from "next-auth/providers/credentials";
-import type { 
-  Account, 
-  Profile, 
-  User,
-  AdapterUser 
-} from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
 
 // Define the credentials schema
 const credentialsSchema = z.object({ 
@@ -18,25 +12,30 @@ const credentialsSchema = z.object({
   password: z.string().min(6) 
 });
 
-export const authConfig = {
+// Define custom user type
+type CustomUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  role: "USER" | "ADMIN";
+};
+
+export const authConfig: NextAuthConfig = {
   adapter: PrismaAdapter(db),
   session: {
-    strategy: "jwt" as const,
+    strategy: "jwt",
   },
   pages: {
     signIn: "/login",
   },
   providers: [
-    Credentials({
+    CredentialsProvider({
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(
-        credentials: Record<"email" | "password", string> | undefined,
-        req: Pick<Request, "body" | "query" | "headers" | "method">
-      ): Promise<User | null> {
+      async authorize(credentials) {
         if (!credentials) return null;
 
         const parsedCredentials = credentialsSchema.safeParse(credentials);
@@ -49,11 +48,11 @@ export const authConfig = {
         // 3. Return the user if valid
 
         // Mock user for demonstration
-        const user: User = {
+        const user: CustomUser = {
           id: "1",
           name: "User",
           email: parsedCredentials.data.email,
-          role: "USER" as const,
+          role: "USER",
         };
 
         return user;
@@ -63,31 +62,17 @@ export const authConfig = {
   callbacks: {
     async jwt({ 
       token, 
-      user, 
-      account, 
-      profile, 
-      trigger 
-    }: {
-      token: JWT;
-      user?: User | AdapterUser | null;
-      account?: Account | null;
-      profile?: Profile;
-      trigger?: "signIn" | "signUp" | "update";
+      user 
     }) {
       if (user) {
-        token.role = (user as User).role;
+        token.role = (user as CustomUser).role;
       }
       return token;
     },
     async session({ 
       session, 
-      token, 
-      user 
-    }: { 
-      session: Session; 
-      token: JWT;
-      user: AdapterUser | User;
-    }) {
+      token 
+    }): Promise<Session> {
       if (token && session.user) {
         session.user.id = token.sub as string;
         session.user.role = token.role as "USER" | "ADMIN";
@@ -95,9 +80,9 @@ export const authConfig = {
       return session;
     }
   }
-} satisfies AuthConfig;
+};
 
-// Type declaration to ensure type safety
+// Type declarations
 declare module "next-auth" {
   interface Session {
     user: {
@@ -108,16 +93,10 @@ declare module "next-auth" {
     }
   }
 
-  interface User {
-    id: string;
-    email?: string | null;
-    name?: string | null;
-    role: "USER" | "ADMIN";
-  }
+  interface User extends CustomUser {}
 }
 
-// Type declaration for JWT
-declare module "@auth/core/jwt" {
+declare module "next-auth/jwt" {
   interface JWT {
     role?: "USER" | "ADMIN";
   }

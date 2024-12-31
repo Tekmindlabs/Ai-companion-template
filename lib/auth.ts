@@ -5,6 +5,7 @@ import type { JWT } from "@auth/core/jwt";
 import type { Session } from "@auth/core/types";
 import { db } from "@/lib/db";
 import Credentials from "next-auth/providers/credentials";
+import { User } from "next-auth";
 
 export const authConfig = {
   adapter: PrismaAdapter(db),
@@ -21,7 +22,7 @@ export const authConfig = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials) {
+      async authorize(credentials: Record<string, string>): Promise<User | null> {
         const parsedCredentials = z
           .object({ 
             email: z.string().email(), 
@@ -31,25 +32,23 @@ export const authConfig = {
 
         if (!parsedCredentials.success) return null;
 
-        // You can add your actual user verification logic here
-        // For now, returning a mock user
         return {
           id: "1",
           name: "User",
           email: parsedCredentials.data.email,
           role: "USER"
-        } as any;
+        };
       }
     })
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: JWT; user?: User | null }) {
       if (user) {
         token.role = user.role;
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: Session; token: JWT }) {
       if (token && session.user) {
         session.user.id = token.sub as string;
         session.user.role = token.role as "USER" | "ADMIN";

@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { type DefaultSession, type NextAuthConfig } from "@auth/core"
-import { JWT } from "@auth/core/jwt"
-import CredentialsProvider from "@auth/core/providers/credentials"
+import type { DefaultSession, Session, User } from "@auth/core/types";
+import { JWT } from "@auth/core/jwt";
+import CredentialsProvider from "@auth/core/providers/credentials";
 import { db } from "@/lib/db";
 
 const credentialsSchema = z.object({ 
@@ -17,7 +17,7 @@ type CustomUser = {
   role: "USER" | "ADMIN";
 };
 
-export const authConfig: NextAuthConfig = {
+export const authConfig: AuthConfig = {
   adapter: PrismaAdapter(db),
   session: {
     strategy: "jwt",
@@ -32,10 +32,13 @@ export const authConfig: NextAuthConfig = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials: Record<"email" | "password", string> | undefined, req: Request) {
-        if (!credentials) return null;
+      async authorize(credentials: Partial<Record<"email" | "password", unknown>>, req: Request) {
+        if (!credentials?.email || !credentials?.password) return null;
 
-        const parsedCredentials = credentialsSchema.safeParse(credentials);
+        const parsedCredentials = credentialsSchema.safeParse({
+          email: credentials.email as string,
+          password: credentials.password as string
+        });
 
         if (!parsedCredentials.success) return null;
 
@@ -54,16 +57,9 @@ export const authConfig: NextAuthConfig = {
     async jwt({ 
       token, 
       user,
-      account,
-      profile 
-    }: {
-      token: JWT;
-      user: CustomUser | null;
-      account: any;
-      profile?: any;
     }) {
       if (user) {
-        token.role = user.role;
+        token.role = (user as CustomUser).role;
       }
       return token;
     },
@@ -73,24 +69,24 @@ export const authConfig: NextAuthConfig = {
     }: { 
       session: DefaultSession; 
       token: JWT;
-    }) {
+    }): Promise<Session> {
       if (token && session.user) {
         session.user.id = token.sub as string;
         session.user.role = token.role as "USER" | "ADMIN";
       }
-      return session as Session;
+      return session;
     }
   }
 };
 
 declare module "@auth/core" {
-  interface Session extends DefaultSession {
+  interface Session {
     user: {
       id: string;
       role: "USER" | "ADMIN";
       email?: string | null;
       name?: string | null;
-    }
+    } & DefaultSession["user"]
   }
 
   interface User extends CustomUser {}

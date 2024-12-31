@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import type { NextAuthConfig } from "@auth/core";
+import type { AuthConfig } from "@auth/core";
 import type { JWT } from "@auth/core/jwt";
 import type { Session } from "@auth/core/types";
 import { db } from "@/lib/db";
@@ -31,23 +31,25 @@ export const authConfig = {
 
         if (!parsedCredentials.success) return null;
 
+        // You can add your actual user verification logic here
+        // For now, returning a mock user
         return {
           id: "1",
           name: "User",
           email: parsedCredentials.data.email,
           role: "USER"
-        };
+        } as any;
       }
     })
   ],
   callbacks: {
-    async jwt({ token, user }: { token: JWT, user: any }) {
+    async jwt({ token, user }) {
       if (user) {
         token.role = user.role;
       }
       return token;
     },
-    async session({ session, token }: { session: Session, token: JWT }) {
+    async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.sub as string;
         session.user.role = token.role as "USER" | "ADMIN";
@@ -55,4 +57,4 @@ export const authConfig = {
       return session;
     }
   }
-} satisfies NextAuthConfig;
+} satisfies AuthConfig;

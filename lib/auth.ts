@@ -1,18 +1,15 @@
 import { z } from "zod";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import type { NextAuthConfig } from "next-auth";
-import type { JWT } from "next-auth/jwt";
-import type { Session, Account, Profile } from "next-auth";
+import { type DefaultSession, type NextAuthConfig } from "@auth/core"
+import { JWT } from "@auth/core/jwt"
+import CredentialsProvider from "@auth/core/providers/credentials"
 import { db } from "@/lib/db";
-import CredentialsProvider from "next-auth/providers/credentials";
 
-// Define the credentials schema
 const credentialsSchema = z.object({ 
   email: z.string().email(), 
   password: z.string().min(6) 
 });
 
-// Define custom user type
 type CustomUser = {
   id: string;
   email: string | null;
@@ -35,19 +32,13 @@ export const authConfig: NextAuthConfig = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials) {
+      async authorize(credentials: Record<"email" | "password", string> | undefined, req: Request) {
         if (!credentials) return null;
 
         const parsedCredentials = credentialsSchema.safeParse(credentials);
 
         if (!parsedCredentials.success) return null;
 
-        // Here you would typically:
-        // 1. Verify the credentials against your database
-        // 2. Hash and compare passwords
-        // 3. Return the user if valid
-
-        // Mock user for demonstration
         const user: CustomUser = {
           id: "1",
           name: "User",
@@ -62,29 +53,38 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     async jwt({ 
       token, 
-      user 
+      user,
+      account,
+      profile 
+    }: {
+      token: JWT;
+      user: CustomUser | null;
+      account: any;
+      profile?: any;
     }) {
       if (user) {
-        token.role = (user as CustomUser).role;
+        token.role = user.role;
       }
       return token;
     },
     async session({ 
       session, 
       token 
-    }): Promise<Session> {
+    }: { 
+      session: DefaultSession; 
+      token: JWT;
+    }) {
       if (token && session.user) {
         session.user.id = token.sub as string;
         session.user.role = token.role as "USER" | "ADMIN";
       }
-      return session;
+      return session as Session;
     }
   }
 };
 
-// Type declarations
-declare module "next-auth" {
-  interface Session {
+declare module "@auth/core" {
+  interface Session extends DefaultSession {
     user: {
       id: string;
       role: "USER" | "ADMIN";
@@ -96,7 +96,7 @@ declare module "next-auth" {
   interface User extends CustomUser {}
 }
 
-declare module "next-auth/jwt" {
+declare module "@auth/core/jwt" {
   interface JWT {
     role?: "USER" | "ADMIN";
   }
